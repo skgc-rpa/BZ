@@ -1,33 +1,25 @@
 import os
-import smtplib
-from email.message import EmailMessage
 import requests
 import warnings
 import urllib3
 import pandas as pd
+import smtplib
 from bs4 import BeautifulSoup
 from urllib.parse import urljoin
 from datetime import datetime, timedelta
 from io import StringIO
-import re
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
+from io import BytesIO
+from lxml import html
+from email.message import EmailMessage
 
 warnings.filterwarnings('ignore')
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # =========================================================
-# 1. Session / Headers (멀티스레딩 & GitHub Actions 최적화)
+# 1. Session / Headers
 # =========================================================
 session = requests.Session()
-session.verify = False
-
-# GitHub Actions의 일시적 네트워크 오류와 멀티스레드 환경을 위한 어댑터 설정
-retries = Retry(total=3, backoff_factor=1, status_forcelist=[500, 502, 503, 504])
-adapter = HTTPAdapter(pool_connections=10, pool_maxsize=10, max_retries=retries)
-session.mount('http://', adapter)
-session.mount('https://', adapter)
+session.verify = False  # 반드시 False
 
 headers = {
     'User-Agent': (
@@ -42,31 +34,44 @@ headers = {
 BASE_URL = "https://www.ccfgroup.com"
 
 # =========================================================
-# 2. Login Function
+# 2. Login Function (session 반환)
 # =========================================================
 def login_ccfgroup(session, headers, login_data):
+    """
+    CCFGroup 로그인
+    성공 시 로그인된 session 반환
+    """
     login_url = "https://www.ccfgroup.com/member/member.php"
-    resp = session.post(login_url, data=login_data, headers=headers, timeout=30)
+
+    resp = session.post(
+        login_url,
+        data=login_data,
+        headers=headers,
+        timeout=30
+    )
     resp.raise_for_status()
+
     return session
 
 # =========================================================
-# 3. Daily / Weekly Finder (lxml 파서 적용)
+# 3. Daily / Weekly Finder
 # =========================================================
-today_date = datetime.today().date()
+today = datetime.today().date()
 offset_days = 1
-target_date = today_date - timedelta(days=offset_days)
+target_date = today - timedelta(days=offset_days)
 
 def find_market_daily(list_url: str, title_prefix: str):
     resp = session.get(list_url, headers=headers, timeout=30)
     resp.raise_for_status()
-    soup = BeautifulSoup(resp.text, "lxml")
+
+    soup = BeautifulSoup(resp.text, "html.parser")
     candidates = []
 
     for a in soup.find_all("a"):
         text = a.get_text(strip=True)
         if not text.startswith(title_prefix):
             continue
+
         try:
             date_str = text[text.find("(") + 1 : text.find(")")]
             post_date = datetime.strptime(date_str, "%b %d, %Y").date()
@@ -77,57 +82,56 @@ def find_market_daily(list_url: str, title_prefix: str):
             full_url = urljoin(BASE_URL, a.get("href"))
             candidates.append((post_date, full_url))
 
-    if not candidates: return None
+    if not candidates:
+        return None
+
     candidates.sort(key=lambda x: x[0], reverse=True)
     return candidates[0][1]
+
 
 def find_market_weekly(list_url: str, title_prefix: str):
     resp = session.get(list_url, headers=headers, timeout=30)
     resp.raise_for_status()
-    soup = BeautifulSoup(resp.text, "lxml")
+
+    soup = BeautifulSoup(resp.text, "html.parser")
 
     for a in soup.find_all("a"):
         if a.get_text(strip=True).startswith(title_prefix):
             return urljoin(BASE_URL, a.get("href"))
+
     return None
 
 # =========================================================
-# 4. URL Extract (멀티스레딩 병렬 처리)
+# 4. URL Extract (비로그인)
 # =========================================================
-url_tasks = {
-    "pta_daily": ("daily", "https://www.ccfgroup.com/newscenter/index.php?Class_ID=100000&subclassid=100000&Prod_ID=100001", "PTA market daily"),
-    "meg_daily": ("daily", "https://www.ccfgroup.com/newscenter/index.php?Class_ID=100000&subclassid=100000&Prod_ID=100002", "MEG market daily"),
-    "yarn_daily": ("daily", "https://www.ccfgroup.com/newscenter/index.php?Class_ID=100000&subclassid=100000&Prod_ID=100005", "Polyester filament yarn market daily"),
-    "fiber_daily": ("daily", "https://www.ccfgroup.com/newscenter/index.php?Class_ID=100000&subclassid=100000&Prod_ID=100006", "Polyester staple fiber market daily"),
-    "bottle_daily": ("daily", "https://www.ccfgroup.com/newscenter/index.php?Class_ID=100000&subclassid=100000&Prod_ID=100004", "PET bottle chip market daily"),
-    "px_weekly": ("weekly", "https://www.ccfgroup.com/newscenter/index.php?Class_ID=200000&subclassid=100000&Prod_ID=100001", "PX market weekly"),
-    "yarn_weekly": ("weekly", "https://www.ccfgroup.com/newscenter/index.php?Class_ID=200000&subclassid=100000&Prod_ID=100005", "Polyester filament yarn market weekly"),
-    "fiber_weekly": ("weekly", "https://www.ccfgroup.com/newscenter/index.php?Class_ID=200000&subclassid=100000&Prod_ID=100006", "Polyester staple fiber market weekly")
+bz_daily = find_market_daily(
+    "https://www.ccfgroup.com/newscenter/index.php?Class_ID=100000&subclassid=C00000",
+    "Benzene market daily"
+)
+
+sm_daily = find_market_daily(
+    "https://www.ccfgroup.com/newscenter/index.php?Class_ID=100000&subclassid=F00000",
+    "Styrene monomer market daily"
+)
+
+bz_weekly = find_market_weekly(
+    "https://www.ccfgroup.com/newscenter/index.php?Class_ID=200000&subclassid=C00000",
+    "Benzene market weekly"
+)
+
+sm_weekly = find_market_weekly(
+    "https://www.ccfgroup.com/newscenter/index.php?Class_ID=200000&subclassid=F00000",
+    "Styrene monomer market weekly"
+)
+
+urls = {
+    "bz_daily": bz_daily,
+    "sm_daily": sm_daily,
+    "bz_weekly": bz_weekly,
+    "sm_weekly": sm_weekly
 }
 
-urls = {}
-with ThreadPoolExecutor(max_workers=4) as executor:
-    futures = {}
-    for name, (type_, link, prefix) in url_tasks.items():
-        if type_ == "daily":
-            futures[executor.submit(find_market_daily, link, prefix)] = name
-        else:
-            futures[executor.submit(find_market_weekly, link, prefix)] = name
-            
-    for future in as_completed(futures):
-        name = futures[future]
-        urls[name] = future.result()
-
-pta_daily = urls.get("pta_daily")
-meg_daily = urls.get("meg_daily")
-yarn_daily = urls.get("yarn_daily")
-fiber_daily = urls.get("fiber_daily")
-bottle_daily = urls.get("bottle_daily")
-px_weekly = urls.get("px_weekly")
-yarn_weekly = urls.get("yarn_weekly")
-fiber_weekly = urls.get("fiber_weekly")
-
-print("=== Extracted URLs (Parallel, No Login) ===")
+print("=== Extracted URLs (No Login) ===")
 for k, v in urls.items():
     print(f"{k}: {v}")
 df_url = pd.Series(urls).to_frame(name='URL')
@@ -137,6 +141,9 @@ df_url = pd.Series(urls).to_frame(name='URL')
 # =========================================================
 USERNAME = os.environ.get("CCF_USER")
 PASSWORD = os.environ.get("CCF_PASSWORD")
+
+if not USERNAME or not PASSWORD:
+    print("⚠️ CCF_USER 또는 CCF_PASSWORD 환경변수가 누락되었습니다.")
 
 login_data = {
     'custlogin': '1',
@@ -150,159 +157,201 @@ session = login_ccfgroup(session, headers, login_data)
 print("✅ 로그인 완료 (session 유지됨)")
 
 # =========================================================
-# 6. 테이블 및 텍스트 데이터 추출 
+# 6. 로그인 상태로 URL 접근 → 테이블 추출
 # =========================================================
 def fetch_tables_as_df(session, url, headers):
-    if not url: return []
+    if not url:
+        return []
+
     resp = session.get(url, headers=headers, timeout=30)
     resp.raise_for_status()
-    html_file_like = StringIO(resp.text)
-    return pd.read_html(html_file_like, flavor='lxml')
-
-def fetch_average_from_text(session, url, headers, start_marker, end_marker):
-    if not url: return None
-    resp = session.get(url, headers=headers, timeout=30)
-    resp.raise_for_status()
-    soup = BeautifulSoup(resp.text, 'lxml')
-    content = soup.find('div', id='fontzoom')
-    if not content: return None
-    text = content.get_text(separator='\n', strip=True)
-    try:
-        target_part = text.split(start_marker)[1].rsplit(end_marker, 1)[0]
-        nums = [int(n) for n in re.findall(r'\d+', target_part)]
-        return sum(nums) / len(nums) if nums else None
-    except (IndexError, ValueError):
-        return None
-
-# =========================================================
-# 8. 데이터 추출 (멀티스레딩 병렬 처리)
-# =========================================================
-fetch_tasks = {
-    "pta_daily": pta_daily, "meg_daily": meg_daily, "yarn_daily": yarn_daily,
-    "fiber_daily": fiber_daily, "bottle_daily": bottle_daily,
-    "px_weekly": px_weekly, "yarn_weekly": yarn_weekly, "fiber_weekly": fiber_weekly
-}
-
-extracted_dfs = {}
-yarn_avg = None
-
-with ThreadPoolExecutor(max_workers=4) as executor:
-    future_to_name = {executor.submit(fetch_tables_as_df, session, url, headers): name 
-                      for name, url in fetch_tasks.items()}
-    future_yarn_avg = executor.submit(fetch_average_from_text, session, yarn_daily, headers, 'assessed to ', ' near')
     
-    for future in as_completed(future_to_name):
-        name = future_to_name[future]
-        extracted_dfs[name] = future.result()
-        
-    yarn_avg = future_yarn_avg.result()
+    html_file_like = StringIO(resp.text)
+    dfs = pd.read_html(html_file_like)
 
-df_pta_daily = extracted_dfs.get("pta_daily", [])
-df_meg_daily = extracted_dfs.get("meg_daily", [])
-df_yarn_daily = extracted_dfs.get("yarn_daily", [])
-df_fiber_daily = extracted_dfs.get("fiber_daily", [])
-df_bottle_daily = extracted_dfs.get("bottle_daily", [])
-df_px_weekly = extracted_dfs.get("px_weekly", [])
-df_yarn_weekly = extracted_dfs.get("yarn_weekly", [])
-df_fiber_weekly = extracted_dfs.get("fiber_weekly", [])
-
-print("✅ 본문 테이블 및 텍스트 데이터 병렬 수집 완료")
+    return dfs
 
 # =========================================================
-# 9. 데이터프레임 처리 
+# 7. 사용 예 (데이터프레임 전처리)
 # =========================================================
-df_pta_daily_f = df_pta_daily[2].iloc[:4,:-1].reset_index(drop=True).pipe(lambda d: d.rename(columns=d.iloc[0]).drop(d.index[0]).reset_index(drop=True))
-df_meg_daily_f = df_meg_daily[2].iloc[:-1,:].reset_index(drop=True).pipe(lambda d: d.rename(columns=d.iloc[0]).drop(d.index[0]).reset_index(drop=True))
-df_yarn_daily_f = df_yarn_daily[2].iloc[:-1,:].reset_index(drop=True).pipe(lambda d: d.rename(columns=d.iloc[0]).drop(d.index[0]).reset_index(drop=True))
-df_fiber_daily_f = df_fiber_daily[2].iloc[:-1,:].reset_index(drop=True).pipe(lambda d: d.rename(columns=d.iloc[0]).drop(d.index[0]).reset_index(drop=True))
-df_bottle_daily_f = df_bottle_daily[2].iloc[:-1,:].reset_index(drop=True).pipe(lambda d: d.rename(columns=d.iloc[0]).drop(d.index[0]).reset_index(drop=True))
+df_bz_daily = fetch_tables_as_df(session, bz_daily, headers)
+df_bz_weekly = fetch_tables_as_df(session, bz_weekly, headers)
+df_sm_daily = fetch_tables_as_df(session, sm_daily, headers)
+df_sm_weekly = fetch_tables_as_df(session, sm_weekly, headers)
 
-df_px_weekly_f = df_px_weekly[2].iloc[(df_px_weekly[2][0].str.contains('operating', case=False, na=False).idxmax())+1:df_px_weekly[2][0].str.contains('imports', case=False, na=False).idxmax()].T.drop_duplicates(keep='first').T.reset_index(drop=True).pipe(lambda d: d.set_axis(d.iloc[0], axis=1).iloc[1:]).reset_index(drop=True).pipe(lambda df: df.rename(columns={df.columns[0]: 'Operating rate'}))
-df_yarn_weekly_f = df_yarn_weekly[8].T.drop_duplicates(keep='first').T.pipe(lambda df: df.set_axis(df.iloc[0], axis=1)).iloc[1:].reset_index(drop=True)
-df_fiber_weekly_f = df_fiber_weekly[7].iloc[1:, :].T.drop_duplicates(keep='first').T.pipe(lambda df: df.set_axis(df.iloc[0], axis=1)).iloc[1:].reset_index(drop=True).pipe(lambda df: df.rename(columns={df.columns[0]: 'Index'}))
+df_bz_daily_f = df_bz_daily[2].iloc[7:14,:].reset_index(drop=True).pipe(lambda d: d.rename(columns=d.iloc[0]).drop(d.index[0]).reset_index(drop=True))
+df_bz_weekly_f = df_bz_weekly[7].iloc[:13,:].T.drop_duplicates(keep='first').T.reset_index(drop=True).pipe(lambda d: d.rename(columns=d.iloc[0]).drop(d.index[0]).reset_index(drop=True))
+df_bz_weekly_f_or = df_bz_weekly_f.iloc[:df_bz_weekly_f.iloc[:, 0].str.contains('Inventory', na=False).idxmax()].reset_index(drop=True)
+df_bz_weekly_f_inv = df_bz_weekly_f.iloc[df_bz_weekly_f.iloc[:, 0].str.contains('Inventory', na=False).idxmax():].reset_index(drop=True).pipe(lambda d: d.rename(columns=d.iloc[0]).drop(d.index[0]).reset_index(drop=True))
+df_sm_weekly_f = df_sm_weekly[7].iloc[1:df_sm_weekly[7].iloc[:, 0].str.contains('Import & export', na=False).idxmax(), :].T.drop_duplicates(keep='first').T.reset_index(drop=True).pipe(lambda d: d.rename(columns=d.iloc[0]).drop(d.index[0]).reset_index(drop=True))
+df_sm_weekly_f_or = df_sm_weekly_f.iloc[:df_sm_weekly_f.iloc[:, 0].str.contains('Styrene port inventory', na=False).idxmax()].reset_index(drop=True)
+df_sm_weekly_f_inv = df_sm_weekly_f.iloc[df_sm_weekly_f.iloc[:, 0].str.contains('Styrene port inventory', na=False).idxmax():df_sm_weekly_f.iloc[:, 0].str.contains('Cash flow', na=False).idxmax()].reset_index(drop=True).pipe(lambda d: d.rename(columns=d.iloc[0]).drop(d.index[0]).reset_index(drop=True))
+df_sm_weekly_f_cf = df_sm_weekly_f.iloc[df_sm_weekly_f.iloc[:, 0].str.contains('Cash flow', na=False).idxmax():].reset_index(drop=True).pipe(lambda d: d.rename(columns=d.iloc[1]).drop(d.index[:2]).reset_index(drop=True)).pipe(lambda d: d.rename(columns={d.columns[0]: 'Cash flow (yuan/mt)'}))
 
-# 1. Margin Backdata
-data_map_margin_backdata_1 = {
-    "RMB | by cash, ex-CMP (yuan/mt)": df_pta_daily_f.iloc[0, 2],
-    "Spot, East China": df_meg_daily_f.iloc[1, 1],
-    "SD POY white | 150D/48F": df_yarn_daily_f.iloc[3, 4],
-    "SD FDY white | 150D/96F": df_yarn_daily_f.iloc[11, 4],
-    "SD DTY large companies white | 150D/48F,   non-intermingled": df_yarn_daily_f.iloc[19, 4],
-    "Virgin   PSF 1.4D*38mm | Daily average(yuan/mt by cash ex-works)": df_fiber_daily_f.iloc[0, 1],
-    "PET water/hot fill bottle chip, by cash EXW": df_bottle_daily_f.iloc[0, 2],
-}
-df_px_margin_backdata = pd.Series(data_map_margin_backdata_1).to_frame(name='Value')
-data_map_margin_backdata_2 = {
-    "RMB | by cash, ex-CMP (yuan/mt)": df_pta_daily[3].iloc[1, 0].split('(')[1].split(')')[0],
-    "Spot, East China": df_meg_daily[3].iloc[1, 0].split('(')[1].split(')')[0],
-    "SD POY white | 150D/48F": df_yarn_daily_f.columns[4],
-    "SD FDY white | 150D/96F": df_yarn_daily_f.columns[4],
-    "SD DTY large companies white | 150D/48F,   non-intermingled": df_yarn_daily_f.columns[4],
-    "Virgin   PSF 1.4D*38mm | Daily average(yuan/mt by cash ex-works)": df_fiber_daily[3].iloc[1, 0].split('(')[1].split(')')[0],
-    "PET water/hot fill bottle chip, by cash EXW": df_bottle_daily[3].iloc[1, 0].split('(')[1].split(')')[0],
-}
-df_px_margin_backdata['Date'] = df_px_margin_backdata.index.map(data_map_margin_backdata_2)
-df_px_margin_backdata['Value'] = df_px_margin_backdata['Value'].astype(float)
+dfs = [df_bz_daily_f, df_bz_weekly_f_or, df_bz_weekly_f_inv, df_sm_weekly_f_or, df_sm_weekly_f_inv, df_sm_weekly_f_cf]
 
-# 2. Margin
-px_margin_calc = (0.855*df_px_margin_backdata.iloc[0, 0]) + (0.335*df_px_margin_backdata.iloc[1, 0])
-data_map_margin_1 = {
-    "POY margin": df_px_margin_backdata.iloc[2, 0] - (px_margin_calc + 1150),
-    "FDY margin": df_px_margin_backdata.iloc[3, 0] - (px_margin_calc + 1550),
-    "DTY margin": df_px_margin_backdata.iloc[4, 0] - (px_margin_calc + 2450),
-    "PSF margin": df_px_margin_backdata.iloc[5, 0] - (px_margin_calc + 900),
-    "PET Bottle Chip margin": df_px_margin_backdata.iloc[6, 0] - (px_margin_calc + 700),
-    "Polyester 복합 margin": 0
-}
-df_px_margin = pd.Series(data_map_margin_1).to_frame(name='Value')
-df_px_margin.iloc[5,0] = (0.16 * df_px_margin.iloc[0, 0]) + (0.28 * df_px_margin.iloc[1, 0]) + (0.16 * df_px_margin.iloc[2, 0]) + (0.22 * df_px_margin.iloc[3, 0]) + (0.17 * df_px_margin.iloc[4, 0])
+for df in dfs:
+    cols = df.columns[1:]
+    df[cols] = df[cols].replace(',', '', regex=True)
+    df[cols] = df[cols].apply(pd.to_numeric, errors='coerce')
 
-# 3. Final Result
-data_map_px_1 = {
-    "중국 PX": df_px_weekly_f.iloc[0, 1],
-    "중국 PTA": df_px_weekly_f.iloc[2, 1],
-    "중국 Polyester": df_px_weekly_f.iloc[3, 1],
-    "Polyester Filament Yarn": df_yarn_weekly_f.iloc[2, 3],
-    "Polyester Staple Fiber": df_fiber_weekly_f.iloc[1, 4],
-    "강소/절강 Texturing machine": df_yarn_weekly_f.iloc[8, 3],
-    "강소/절강 DTY Machine": df_yarn_weekly_f.iloc[7, 3],
-    "중국 Polyester Fiber Yarn": yarn_avg,
-    "POY": df_yarn_weekly_f.iloc[4, 3],
-    "FDY": df_yarn_weekly_f.iloc[5, 3],
-    "DTY": df_yarn_weekly_f.iloc[6, 3],
-    "PSF": df_fiber_weekly_f.iloc[0, 4],
-    "Polyester 복합": df_px_margin.iloc[5,0],
-    "장섬유": df_px_margin.iloc[0,0],
-    "단섬유": df_px_margin.iloc[3,0],
-    "Bottle Chip": df_px_margin.iloc[4,0]
-}
-df_px_result = pd.Series(data_map_px_1).to_frame(name='Value')
-data_map_px_2 = {
-    "중국 PX": df_px_weekly_f.columns[1],
-    "중국 PTA": df_px_weekly_f.columns[1],
-    "중국 Polyester": df_px_weekly_f.columns[1],
-    "Polyester Filament Yarn": df_yarn_weekly_f.columns[3],
-    "Polyester Staple Fiber": df_fiber_weekly_f.columns[4],
-    "강소/절강 Texturing machine": df_yarn_weekly_f.columns[3],
-    "강소/절강 DTY Machine": df_yarn_weekly_f.columns[3],
-    "중국 Polyester Fiber Yarn": df_yarn_daily_f.columns[4],
-    "POY": df_yarn_weekly_f.columns[3],
-    "FDY": df_yarn_weekly_f.columns[3],
-    "DTY": df_yarn_weekly_f.columns[3],
-    "PSF": df_fiber_weekly_f.columns[4],
-    "Polyester 복합": "",
-    "장섬유": "",
-    "단섬유": "",
-    "Bottle Chip": ""
-}
-df_px_result['Date'] = df_px_result.index.map(data_map_px_2)
-df_px_result['Value'] = df_px_result['Value'].astype(float).round(2)
+print("✅ CCFGroup 테이블 DataFrame 추출 및 전처리 완료")
 
+# =========================================================
+# 8. EIA 데이터 및 환율 정보 스크래핑
+# =========================================================
+url_eia = "https://www.eia.gov/dnav/pet/hist_xls/WPULEUS3w.xls"
+
+response = requests.get(url_eia)
+response.raise_for_status()
+
+df_eia = pd.read_excel(
+    BytesIO(response.content),
+    sheet_name="Data 1",
+    skiprows=2
+)
+
+print(f"EIA 최근 데이터 - {df_eia.iloc[-1,-2]} : {df_eia.iloc[-1,-1]}")
+
+USDCNY_str = html.fromstring(
+    requests.get(
+        "http://m.stock.naver.com/marketindex/exchangeWorld/USDCNY",
+        headers={"User-Agent": "Mozilla/5.0"},
+        verify=False
+    ).text
+).xpath(
+    "/html/body/div[1]/div[1]/div[2]/div/div[1]/div[2]/div[2]/strong/text()"
+)[0]
+
+USDCNY = float(USDCNY_str.replace(',', ''))
+usdcny_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+print(f"✅ 현재 USD/CNY 환율: {USDCNY} (추출 시간: {usdcny_time})")
+
+# =========================================================
+# 9. ICIS 데이터 로드 및 전처리
+# =========================================================
+today_dt = datetime.now()
+start_date = (today_dt - timedelta(days=30)).strftime('%Y-%m-%d')
+end_date = "2099-12-31"
+dlkey = "cfdb4d7d-85c9-4334-9c0d-a7a3dea0e13f"
+
+print(f"\n조회 기간: {start_date} ~ {end_date}")
+
+urls_icis = {
+    "ed": f"https://petchem.analytics.icis.com/wp-content/plugins/tschachsolutions/inc/highChartsInterface/api/hcapi.php?csv=1&dlkey={dlkey}&query_id=ICIS_petchem_margin_benzene_flexi_two_margin_comparison&form_hcg6980045b8bddb975559628%5B%5D={start_date}&form_hcg6980045b8bddb975559628%5B%5D={end_date}&form_hcg6980045b8bddb975559628%5B%5D=Weekly&form_hcg6980045b8bddb975559628%5B%5D=USD&form_hcg6980045b8bddb975559628%5B%5D=Tonne&form_hcg6980045b8bddb975559628%5B%5D=US%20Gulf&form_hcg6980045b8bddb975559628%5B%5D=Benzene%20extractive%20distillation&form_hcg6980045b8bddb975559628%5B%5D=Contract&form_hcg6980045b8bddb975559628%5B%5D=North%20East%20Asia&form_hcg6980045b8bddb975559628%5B%5D=Benzene%20extractive%20distillation&form_hcg6980045b8bddb975559628%5B%5D=Spot&chartset=comparison",
+    "stdp": f"https://petchem.analytics.icis.com/wp-content/plugins/tschachsolutions/inc/highChartsInterface/api/hcapi.php?csv=1&dlkey={dlkey}&query_id=ICIS_petchem_margin_benzene_flexi_two_margin_comparison&div=hcg698d6e50f4221087364321&form_hcg698d6e50f4221087364321%5B%5D={start_date}&form_hcg698d6e50f4221087364321%5B%5D={end_date}&form_hcg698d6e50f4221087364321%5B%5D=Weekly&form_hcg698d6e50f4221087364321%5B%5D=USD&form_hcg698d6e50f4221087364321%5B%5D=Tonne&form_hcg698d6e50f4221087364321%5B%5D=US%20Gulf&form_hcg698d6e50f4221087364321%5B%5D=Benzene%20STDP&form_hcg698d6e50f4221087364321%5B%5D=Contract&form_hcg698d6e50f4221087364321%5B%5D=North%20East%20Asia&form_hcg698d6e50f4221087364321%5B%5D=Benzene%20STDP&form_hcg698d6e50f4221087364321%5B%5D=Spot&chartset=comparison",
+    "hda": f"https://petchem.analytics.icis.com/wp-content/plugins/tschachsolutions/inc/highChartsInterface/api/hcapi.php?csv=1&dlkey={dlkey}&query_id=ICIS_petchem_margin_benzene_flexi_two_margin_comparison&div=hcg698d786e3e0ce133040510&form_hcg698d786e3e0ce133040510%5B%5D={start_date}&form_hcg698d786e3e0ce133040510%5B%5D={end_date}&form_hcg698d786e3e0ce133040510%5B%5D=Weekly&form_hcg698d786e3e0ce133040510%5B%5D=USD&form_hcg698d786e3e0ce133040510%5B%5D=Tonne&form_hcg698d786e3e0ce133040510%5B%5D=US%20Gulf&form_hcg698d786e3e0ce133040510%5B%5D=Benzene%20hydrodealkylation&form_hcg698d786e3e0ce133040510%5B%5D=Contract&form_hcg698d786e3e0ce133040510%5B%5D=North%20East%20Asia&form_hcg698d786e3e0ce133040510%5B%5D=Benzene%20hydrodealkylation&form_hcg698d786e3e0ce133040510%5B%5D=Spot&chartset=comparison"
+}
+
+results = {}
+
+for key, url in urls_icis.items():
+    try:
+        df = pd.read_csv(url)
+        df['Date'] = pd.to_datetime(df['Date'])
+        results[key] = df.loc[df.groupby('Name')['Date'].idxmax()].reset_index(drop=True)
+        print(f"✅ [{key.upper()}] 데이터 로드 및 전처리 완료")
+    except pd.errors.EmptyDataError:
+        print(f"❌ [{key.upper()}] 서버에서 빈 데이터를 반환했습니다.")
+    except Exception as e:
+        print(f"❌ [{key.upper()}] 예상치 못한 오류: {e}")
+
+if results:
+    df_icis = pd.concat(results.values(), ignore_index=True)
+else:
+    print("\n가져올 수 있는 데이터가 없어 병합을 수행하지 못했습니다.")
+
+# =========================================================
+# 10. 최종 결과 데이터프레임 매핑 (Value & Date)
+# =========================================================
+data_map_bz_1 = {
+    "Asia BZ": df_bz_weekly_f_or.iloc[1, 2],
+    "중국 BZ (Oil-based)": df_bz_weekly_f_or.iloc[0, 2],
+    "중국 BZ (Coal-based)": df_bz_weekly_f_or.iloc[2, 2],
+    "미국 Refinery": df_eia.iloc[-1,-1],
+    "NEA BZ Extraction": df_icis.iloc[0,2],
+    "NEA TDP": df_icis.iloc[2,2],
+    "NEA Cracker": df_icis.iloc[4,2],
+    "US BZ Extraction": df_icis.iloc[1,2],
+    "US STDP": df_icis.iloc[3,2],
+    "BZ RMB(M+1)-FOB KOR": 0,
+    "BZ US(M+2)-FOB KOR": 0,
+    "BZ CFR CHN-ARA(M)": 0,
+    "SM ARA(M+1)-Asia": 0,
+    "중국 D/S 복합 가동률": ((df_bz_weekly_f_or.iloc[3, 2]*0.38) + (df_bz_weekly_f_or.iloc[4, 2]*0.14) + (df_bz_weekly_f_or.iloc[6, 2] *0.24) + (df_bz_weekly_f_or.iloc[7, 2] *0.12))/0.88,
+    "중국 SM 가동률": df_bz_weekly_f_or.iloc[3, 2],
+    "중국 SM 마진": df_bz_daily_f.iloc[0, 0].split('(')[1].strip(')'),
+    "중국 PS/EPS/ABS 복합 가동률": ((df_sm_weekly_f_or.iloc[2, 2]*0.29) + (df_sm_weekly_f_or.iloc[3, 2]*0.21) + (df_sm_weekly_f_or.iloc[1, 2] *0.24))/0.74,
+    "중국 PS/EPS/ABS 복합 마진": 0,
+    "중국 Phenol 가동률": df_bz_weekly_f_or.iloc[4, 2],
+    "중국 Phenol 마진": df_bz_daily_f.iloc[1, 0].split('(')[1].strip(')'),
+    "중국 Aniline 가동률": df_bz_weekly_f_or.iloc[7, 2],
+    "중국 Aniline 마진": df_bz_daily_f.iloc[2, 0].split('(')[1].strip(')'),
+    "중국 CPL 가동률": df_bz_weekly_f_or.iloc[6, 2],
+    "중국 CPL 마진": df_bz_daily_f.iloc[3, 0].split('(')[1].strip(')'),
+    "중국 BZ 화동": df_bz_weekly_f_inv.iloc[0, 2],
+    "중국 SM 화동": df_sm_weekly_f_inv.iloc[0, 2]
+}
+
+df_bz_result = pd.Series(data_map_bz_1).to_frame(name='Value')
+
+data_map_bz_2 = {
+    "Asia BZ": df_bz_weekly_f_or.columns[2],
+    "중국 BZ (Oil-based)": df_bz_weekly_f_or.columns[2],
+    "중국 BZ (Coal-based)": df_bz_weekly_f_or.columns[2],
+    "미국 Refinery": df_eia.iloc[-1,-2].strftime('%Y-%m-%d'),
+    "NEA BZ Extraction": df_icis.iloc[0,1].strftime('%Y-%m-%d'),
+    "NEA TDP": df_icis.iloc[2,1].strftime('%Y-%m-%d'),
+    "NEA Cracker": df_icis.iloc[4,1].strftime('%Y-%m-%d'),
+    "US BZ Extraction": df_icis.iloc[1,1].strftime('%Y-%m-%d'),
+    "US STDP": df_icis.iloc[3,1].strftime('%Y-%m-%d'),
+    "BZ RMB(M+1)-FOB KOR": 0,
+    "BZ US(M+2)-FOB KOR": 0,
+    "BZ CFR CHN-ARA(M)": 0,
+    "SM ARA(M+1)-Asia": 0,
+    "중국 D/S 복합 가동률": df_bz_weekly_f_or.columns[2],
+    "중국 SM 가동률": df_bz_weekly_f_or.columns[2],
+    "중국 SM 마진": df_bz_daily_f.iloc[0, 0].split('(')[1].strip(')'),
+    "중국 PS/EPS/ABS 복합 가동률": df_sm_weekly_f_or.columns[2],
+    "중국 PS/EPS/ABS 복합 마진": 0,
+    "중국 Phenol 가동률": df_bz_weekly_f_or.columns[2],
+    "중국 Phenol 마진": df_bz_daily_f.iloc[1, 0].split('(')[1].strip(')'),
+    "중국 Aniline 가동률": df_bz_weekly_f_or.columns[2],
+    "중국 Aniline 마진": df_bz_daily_f.iloc[2, 0].split('(')[1].strip(')'),
+    "중국 CPL 가동률": df_bz_weekly_f_or.columns[2],
+    "중국 CPL 마진": df_bz_daily_f.iloc[3, 0].split('(')[1].strip(')'),
+    "중국 BZ 화동": df_bz_weekly_f_inv.columns[2],
+    "중국 SM 화동": df_sm_weekly_f_inv.columns[2]
+}
+
+df_bz_result['Date'] = df_bz_result.index.map(data_map_bz_2)
+df_bz_result['Value'] = df_bz_result['Value'].astype(float).round(2)
+
+# =========================================================
+# 11. 엑셀 파일로 출력 (xlsxwriter)
+# =========================================================
 today_str = datetime.now().strftime('%Y-%m-%d')
-file_name = f"px_result_{today_str}.xlsx"
+file_name = f"bz_result_{today_str}.xlsx"
 
-targets = {"px_result": df_px_result, "px_margin": df_px_margin, 
-           "px_margin_backdata": df_px_margin_backdata, "url": df_url}
+for col in df_eia.select_dtypes(include=['datetime64', 'datetimetz']).columns:
+    df_eia[col] = df_eia[col].dt.strftime('%Y-%m-%d')
+
+if 'df_icis' in locals():
+    for col in df_icis.select_dtypes(include=['datetime64', 'datetimetz']).columns:
+        df_icis[col] = df_icis[col].dt.strftime('%Y-%m-%d')
+
+df_usdcny = pd.DataFrame({
+    'USDCNY': [USDCNY],
+    'Extraction Time': [usdcny_time]
+})
+
+targets = {
+    "bz_result": df_bz_result,
+    "eia": df_eia,
+    "icis": df_icis if 'df_icis' in locals() else pd.DataFrame(),
+    "USDCNY": df_usdcny,
+    "url": df_url
+}
 
 with pd.ExcelWriter(file_name, engine='xlsxwriter') as writer:
     workbook = writer.book
@@ -311,31 +360,32 @@ with pd.ExcelWriter(file_name, engine='xlsxwriter') as writer:
     header_format = workbook.add_format({'bold': True, 'bg_color': '#BCD1E4', 'border': 1, 'align': 'center'})
 
     for sheet_name, df in targets.items():
-        df.to_excel(writer, sheet_name=sheet_name, index=True)
-        worksheet = writer.sheets[sheet_name]
-        
-        rows, cols = df.shape
-        worksheet.conditional_format(0, 0, rows, cols, {
-            'type': 'formula',
-            'criteria': '=1',
-            'format': border_format
-        })
-        
-        for col_num, value in enumerate(df.columns.values):
-            worksheet.write(0, col_num + 1, value, header_format)
-        worksheet.write(0, 0, df.index.name or 'Index', header_format)
+        if df is not None and not df.empty:
+            df.to_excel(writer, sheet_name=sheet_name, index=True)
+            worksheet = writer.sheets[sheet_name]
+            
+            rows, cols = df.shape
+            worksheet.conditional_format(0, 0, rows, cols, {
+                'type': 'formula',
+                'criteria': '=1',
+                'format': border_format
+            })
+            
+            for col_num, value in enumerate(df.columns.values):
+                worksheet.write(0, col_num + 1, str(value), header_format)
+            worksheet.write(0, 0, str(df.index.name or 'Index'), header_format)
 
-        idx_max_len = max(df.index.astype(str).map(len).max(), len(str(df.index.name or "Index"))) + 3
-        worksheet.set_column(0, 0, idx_max_len)
-        
-        for i, col in enumerate(df.columns):
-            column_len = max(df[col].astype(str).map(len).max(), len(str(col))) + 3
-            worksheet.set_column(i + 1, i + 1, column_len)
+            idx_max_len = max(df.index.astype(str).map(len).max(), len(str(df.index.name or "Index"))) + 3
+            worksheet.set_column(0, 0, idx_max_len)
+            
+            for i, col in enumerate(df.columns):
+                column_len = max(df[col].astype(str).map(len).max(), len(str(col))) + 3
+                worksheet.set_column(i + 1, i + 1, column_len)
 
 print(f"✅ '{file_name}' 저장 완료!")
 
 # =========================================================
-# 10. 이메일 발송 (Gmail 앱 비밀번호 사용)
+# 12. 이메일 발송 (Gmail 앱 비밀번호 사용)
 # =========================================================
 print("=== 메일 발송 준비 ===")
 
@@ -343,19 +393,18 @@ sender_email = os.environ.get("GMAIL_USER")
 app_password = os.environ.get("GMAIL_APP_PASSWORD")
 
 # 수신처(To)와 참조처(Cc) 설정 
-# to_emails = "jp_lee@sk.com"
-# cc_emails = "jp_lee@sk.com"
-to_emails = "michael.park@sk.com, jsoh@sk.com, hoseok@sk.com, hyo548@sk.com"
-cc_emails = "carly1206@sk.com, rchangjo@sk.com, cr7@sk.com, jp_lee@sk.com"
+# to_emails = "carly1206@sk.com, rchangjo@sk.com"
+# cc_emails = "michael.park@sk.com, jsoh@sk.com, hoseok@sk.com, hyo548@sk.com, cr7@sk.com, jp_lee@sk.com"
+to_emails = "jp_lee@sk.com"
+cc_emails = "jp_lee@sk.com"
 
-# 메일 제목 (yyyy-mm-dd 형식)
-subject = f"PX CCF {today_str}"
+# 메일 제목 (BZ CCF + yyyy-mm-dd 형식)
+subject = f"BZ CCF {today_str}"
 
-# 1. 데이터프레임을 HTML 표로 변환
-html_table = df_px_result.to_html(justify='center', index=True)
+# 1. 데이터프레임을 HTML 표로 변환 (df_px_result -> df_bz_result로 변경)
+html_table = df_bz_result.to_html(justify='center', index=True)
 
 # 2. Pandas가 자동 생성한 table 태그를 원하는 인라인 스타일이 적용된 태그로 교체
-# (이메일 클라이언트는 외부 CSS나 style 태그보다 인라인 스타일을 더 잘 인식합니다)
 custom_table_tag = '<table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse; text-align:center; font-family:Calibri, Arial, sans-serif; font-size:13px;">'
 html_table = html_table.replace('<table border="1" class="dataframe">', custom_table_tag)
 
@@ -363,7 +412,6 @@ html_table = html_table.replace('<table border="1" class="dataframe">', custom_t
 html_body = f"""
 <html>
 <body style="margin:0; padding:0;">
-
     <table width="100%" cellpadding="0" cellspacing="0" border="0">
         <tr>
             <td style="padding:20px;
@@ -373,7 +421,7 @@ html_body = f"""
 
                 안녕하세요,<br><br>
 
-                오늘자 CCF 추출 결과입니다.<br>
+                오늘자 BZ CCF 추출 결과입니다.<br>
                 상세 내용은 첨부파일을 확인해 주시기 바랍니다.<br><br>
 
                 {html_table}
@@ -381,7 +429,6 @@ html_body = f"""
             </td>
         </tr>
     </table>
-
 </body>
 </html>
 """
@@ -390,8 +437,8 @@ html_body = f"""
 msg = EmailMessage()
 msg['Subject'] = subject
 msg['From'] = sender_email
-msg['To'] = to_emails    # 수신처 변수 할당
-msg['Cc'] = cc_emails    # 참조처 변수 할당
+msg['To'] = to_emails
+msg['Cc'] = cc_emails
 msg.set_content("HTML 뷰어를 지원하는 메일 클라이언트를 사용해 주세요.") # Fallback 텍스트
 msg.add_alternative(html_body, subtype='html')
 
