@@ -208,7 +208,8 @@ response.raise_for_status()
 df_eia = pd.read_excel(
     BytesIO(response.content),
     sheet_name="Data 1",
-    skiprows=2
+    skiprows=2,
+    engine="calamine"
 )
 
 print(f"EIA 최근 데이터 - {df_eia.iloc[-1,-2]} : {df_eia.iloc[-1,-1]}")
