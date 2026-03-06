@@ -22,9 +22,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          # 코드에 필요한 라이브러리 설치
-          # pip install -r requirements.txt
-          pip install requests pandas beautifulsoup4 lxml xlsxwriter urllib3 "xlrd>=2.0.1"
+          pip install requests pandas beautifulsoup4 lxml xlsxwriter urllib3 "xlrd>=2.0.1" openpyxl
 
       - name: Run CCF Scraper Script
         # 작성하신 파이썬 스크립트 파일명 (예: main.py)
