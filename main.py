@@ -280,21 +280,22 @@ data_map_bz_1 = {
     "SM ARA(M+1)-Asia": 0,
     "중국 D/S 복합 가동률": ((df_bz_weekly_f_or.iloc[3, 2]*0.38) + (df_bz_weekly_f_or.iloc[4, 2]*0.14) + (df_bz_weekly_f_or.iloc[6, 2] *0.24) + (df_bz_weekly_f_or.iloc[7, 2] *0.12))/0.88,
     "중국 SM 가동률": df_bz_weekly_f_or.iloc[3, 2],
-    "중국 SM 마진": df_bz_daily_f.iloc[0, 0].split('(')[1].strip(')'),
+    "중국 SM 마진": df_bz_daily_f.iloc[0, 3]/USDCNY,
     "중국 PS/EPS/ABS 복합 가동률": ((df_sm_weekly_f_or.iloc[2, 2]*0.29) + (df_sm_weekly_f_or.iloc[3, 2]*0.21) + (df_sm_weekly_f_or.iloc[1, 2] *0.24))/0.74,
     "중국 PS/EPS/ABS 복합 마진": 0,
     "중국 Phenol 가동률": df_bz_weekly_f_or.iloc[4, 2],
-    "중국 Phenol 마진": df_bz_daily_f.iloc[1, 0].split('(')[1].strip(')'),
+    "중국 Phenol 마진": df_bz_daily_f.iloc[1, 3]/USDCNY,
     "중국 Aniline 가동률": df_bz_weekly_f_or.iloc[7, 2],
-    "중국 Aniline 마진": df_bz_daily_f.iloc[2, 0].split('(')[1].strip(')'),
+    "중국 Aniline 마진": df_bz_daily_f.iloc[2, 3]/USDCNY,
     "중국 CPL 가동률": df_bz_weekly_f_or.iloc[6, 2],
-    "중국 CPL 마진": df_bz_daily_f.iloc[3, 0].split('(')[1].strip(')'),
+    "중국 CPL 마진": df_bz_daily_f.iloc[3, 3]/USDCNY,
     "중국 BZ 화동": df_bz_weekly_f_inv.iloc[0, 2],
     "중국 SM 화동": df_sm_weekly_f_inv.iloc[0, 2]
 }
 
 df_bz_result = pd.Series(data_map_bz_1).to_frame(name='Value')
 
+# ✅ 에러가 나던 분리 로직을 기존 원본 코드(df_bz_daily[3])로 정상 복구
 data_map_bz_2 = {
     "Asia BZ": df_bz_weekly_f_or.columns[2],
     "중국 BZ (Oil-based)": df_bz_weekly_f_or.columns[2],
@@ -311,15 +312,15 @@ data_map_bz_2 = {
     "SM ARA(M+1)-Asia": 0,
     "중국 D/S 복합 가동률": df_bz_weekly_f_or.columns[2],
     "중국 SM 가동률": df_bz_weekly_f_or.columns[2],
-    "중국 SM 마진": df_bz_daily_f.iloc[0, 0].split('(')[1].strip(')'),
+    "중국 SM 마진": df_bz_daily[3].iloc[1, 0].split('(')[1].strip(')'),
     "중국 PS/EPS/ABS 복합 가동률": df_sm_weekly_f_or.columns[2],
     "중국 PS/EPS/ABS 복합 마진": 0,
     "중국 Phenol 가동률": df_bz_weekly_f_or.columns[2],
-    "중국 Phenol 마진": df_bz_daily_f.iloc[1, 0].split('(')[1].strip(')'),
+    "중국 Phenol 마진": df_bz_daily[3].iloc[1, 0].split('(')[1].strip(')'),
     "중국 Aniline 가동률": df_bz_weekly_f_or.columns[2],
-    "중국 Aniline 마진": df_bz_daily_f.iloc[2, 0].split('(')[1].strip(')'),
+    "중국 Aniline 마진": df_bz_daily[3].iloc[1, 0].split('(')[1].strip(')'),
     "중국 CPL 가동률": df_bz_weekly_f_or.columns[2],
-    "중국 CPL 마진": df_bz_daily_f.iloc[3, 0].split('(')[1].strip(')'),
+    "중국 CPL 마진": df_bz_daily[3].iloc[1, 0].split('(')[1].strip(')'),
     "중국 BZ 화동": df_bz_weekly_f_inv.columns[2],
     "중국 SM 화동": df_sm_weekly_f_inv.columns[2]
 }
@@ -392,23 +393,18 @@ print("=== 메일 발송 준비 ===")
 sender_email = os.environ.get("GMAIL_USER")
 app_password = os.environ.get("GMAIL_APP_PASSWORD")
 
-# 수신처(To)와 참조처(Cc) 설정 
-# to_emails = "carly1206@sk.com, rchangjo@sk.com"
-# cc_emails = "michael.park@sk.com, jsoh@sk.com, hoseok@sk.com, hyo548@sk.com, cr7@sk.com, jp_lee@sk.com"
+# to_emails = "michael.park@sk.com, jsoh@sk.com, hoseok@sk.com, hyo548@sk.com"
+# cc_emails = "carly1206@sk.com, rchangjo@sk.com, cr7@sk.com, jp_lee@sk.com"
 to_emails = "jp_lee@sk.com"
 cc_emails = "jp_lee@sk.com"
 
-# 메일 제목 (BZ CCF + yyyy-mm-dd 형식)
 subject = f"BZ CCF {today_str}"
 
-# 1. 데이터프레임을 HTML 표로 변환 (df_px_result -> df_bz_result로 변경)
 html_table = df_bz_result.to_html(justify='center', index=True)
 
-# 2. Pandas가 자동 생성한 table 태그를 원하는 인라인 스타일이 적용된 태그로 교체
 custom_table_tag = '<table border="1" cellpadding="5" cellspacing="0" style="border-collapse:collapse; text-align:center; font-family:Calibri, Arial, sans-serif; font-size:13px;">'
 html_table = html_table.replace('<table border="1" class="dataframe">', custom_table_tag)
 
-# 3. HTML 이메일 본문 생성
 html_body = f"""
 <html>
 <body style="margin:0; padding:0;">
@@ -433,16 +429,14 @@ html_body = f"""
 </html>
 """
 
-# 메일 객체 생성 및 설정
 msg = EmailMessage()
 msg['Subject'] = subject
 msg['From'] = sender_email
 msg['To'] = to_emails
 msg['Cc'] = cc_emails
-msg.set_content("HTML 뷰어를 지원하는 메일 클라이언트를 사용해 주세요.") # Fallback 텍스트
+msg.set_content("HTML 뷰어를 지원하는 메일 클라이언트를 사용해 주세요.") 
 msg.add_alternative(html_body, subtype='html')
 
-# 작성된 엑셀 파일 첨부
 with open(file_name, 'rb') as f:
     excel_data = f.read()
     
@@ -453,7 +447,6 @@ msg.add_attachment(
     filename=file_name
 )
 
-# SMTP 서버 연결 및 전송
 if sender_email and app_password:
     try:
         with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
