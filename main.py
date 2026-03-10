@@ -179,11 +179,11 @@ df_bz_weekly = fetch_tables_as_df(session, bz_weekly, headers)
 df_sm_daily = fetch_tables_as_df(session, sm_daily, headers)
 df_sm_weekly = fetch_tables_as_df(session, sm_weekly, headers)
 
-df_bz_daily_f = df_bz_daily[2].iloc[7:14,:].reset_index(drop=True).pipe(lambda d: d.rename(columns=d.iloc[0]).drop(d.index[0]).reset_index(drop=True))
-df_bz_weekly_f = df_bz_weekly[7].iloc[:13,:].T.drop_duplicates(keep='first').T.reset_index(drop=True).pipe(lambda d: d.rename(columns=d.iloc[0]).drop(d.index[0]).reset_index(drop=True))
+df_bz_daily_f = df_bz_daily[1].iloc[7:14,:].reset_index(drop=True).pipe(lambda d: d.rename(columns=d.iloc[0]).drop(d.index[0]).reset_index(drop=True))
+df_bz_weekly_f = df_bz_weekly[2].iloc[:13,:].T.drop_duplicates(keep='first').T.reset_index(drop=True).pipe(lambda d: d.rename(columns=d.iloc[0]).drop(d.index[0]).reset_index(drop=True))
 df_bz_weekly_f_or = df_bz_weekly_f.iloc[:df_bz_weekly_f.iloc[:, 0].str.contains('Inventory', na=False).idxmax()].reset_index(drop=True)
 df_bz_weekly_f_inv = df_bz_weekly_f.iloc[df_bz_weekly_f.iloc[:, 0].str.contains('Inventory', na=False).idxmax():].reset_index(drop=True).pipe(lambda d: d.rename(columns=d.iloc[0]).drop(d.index[0]).reset_index(drop=True))
-df_sm_weekly_f = df_sm_weekly[7].iloc[1:df_sm_weekly[7].iloc[:, 0].str.contains('Import & export', na=False).idxmax(), :].T.drop_duplicates(keep='first').T.reset_index(drop=True).pipe(lambda d: d.rename(columns=d.iloc[0]).drop(d.index[0]).reset_index(drop=True))
+df_sm_weekly_f = df_sm_weekly[2].iloc[1:df_sm_weekly[2].iloc[:, 0].str.contains('Import & export', na=False).idxmax(), :].T.drop_duplicates(keep='first').T.reset_index(drop=True).pipe(lambda d: d.rename(columns=d.iloc[0]).drop(d.index[0]).reset_index(drop=True))
 df_sm_weekly_f_or = df_sm_weekly_f.iloc[:df_sm_weekly_f.iloc[:, 0].str.contains('Styrene port inventory', na=False).idxmax()].reset_index(drop=True)
 df_sm_weekly_f_inv = df_sm_weekly_f.iloc[df_sm_weekly_f.iloc[:, 0].str.contains('Styrene port inventory', na=False).idxmax():df_sm_weekly_f.iloc[:, 0].str.contains('Cash flow', na=False).idxmax()].reset_index(drop=True).pipe(lambda d: d.rename(columns=d.iloc[0]).drop(d.index[0]).reset_index(drop=True))
 df_sm_weekly_f_cf = df_sm_weekly_f.iloc[df_sm_weekly_f.iloc[:, 0].str.contains('Cash flow', na=False).idxmax():].reset_index(drop=True).pipe(lambda d: d.rename(columns=d.iloc[1]).drop(d.index[:2]).reset_index(drop=True)).pipe(lambda d: d.rename(columns={d.columns[0]: 'Cash flow (yuan/mt)'}))
@@ -313,15 +313,15 @@ data_map_bz_2 = {
     "SM ARA(M+1)-Asia": 0,
     "중국 D/S 복합 가동률": df_bz_weekly_f_or.columns[2],
     "중국 SM 가동률": df_bz_weekly_f_or.columns[2],
-    "중국 SM 마진": df_bz_daily[3].iloc[1, 0].split('(')[1].strip(')'),
+    "중국 SM 마진": df_bz_daily[0].iloc[0, 0].split('(')[1].strip(')'),
     "중국 PS/EPS/ABS 복합 가동률": df_sm_weekly_f_or.columns[2],
     "중국 PS/EPS/ABS 복합 마진": 0,
     "중국 Phenol 가동률": df_bz_weekly_f_or.columns[2],
-    "중국 Phenol 마진": df_bz_daily[3].iloc[1, 0].split('(')[1].strip(')'),
+    "중국 Phenol 마진": df_bz_daily[0].iloc[0, 0].split('(')[1].strip(')'),
     "중국 Aniline 가동률": df_bz_weekly_f_or.columns[2],
-    "중국 Aniline 마진": df_bz_daily[3].iloc[1, 0].split('(')[1].strip(')'),
+    "중국 Aniline 마진": df_bz_daily[0].iloc[0, 0].split('(')[1].strip(')'),
     "중국 CPL 가동률": df_bz_weekly_f_or.columns[2],
-    "중국 CPL 마진": df_bz_daily[3].iloc[1, 0].split('(')[1].strip(')'),
+    "중국 CPL 마진": df_bz_daily[0].iloc[0, 0].split('(')[1].strip(')'),
     "중국 BZ 화동": df_bz_weekly_f_inv.columns[2],
     "중국 SM 화동": df_sm_weekly_f_inv.columns[2]
 }
