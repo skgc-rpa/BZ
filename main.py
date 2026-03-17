@@ -298,9 +298,9 @@ df_bz_result = pd.Series(data_map_bz_1).to_frame(name='Value')
 
 # ✅ 에러가 나던 분리 로직을 기존 원본 코드(df_bz_daily[3])로 정상 복구
 data_map_bz_2 = {
-    "Asia BZ": df_bz_weekly_f_or.columns[2],
-    "중국 BZ (Oil-based)": df_bz_weekly_f_or.columns[2],
-    "중국 BZ (Coal-based)": df_bz_weekly_f_or.columns[2],
+    "Asia BZ": df_bz_weekly_f_or.columns[-1],
+    "중국 BZ (Oil-based)": df_bz_weekly_f_or.columns[-1],
+    "중국 BZ (Coal-based)": df_bz_weekly_f_or.columns[-1],
     "미국 Refinery": df_eia.iloc[-1,-2].strftime('%Y-%m-%d'),
     "NEA BZ Extraction": df_icis.iloc[0,1].strftime('%Y-%m-%d'),
     "NEA TDP": df_icis.iloc[2,1].strftime('%Y-%m-%d'),
@@ -311,19 +311,19 @@ data_map_bz_2 = {
     "BZ US(M+2)-FOB KOR": 0,
     "BZ CFR CHN-ARA(M)": 0,
     "SM ARA(M+1)-Asia": 0,
-    "중국 D/S 복합 가동률": df_bz_weekly_f_or.columns[2],
-    "중국 SM 가동률": df_bz_weekly_f_or.columns[2],
+    "중국 D/S 복합 가동률": df_bz_weekly_f_or.columns[-1],
+    "중국 SM 가동률": df_bz_weekly_f_or.columns[-1],
     "중국 SM 마진": df_bz_daily[0].iloc[0, 0].split('(')[1].strip(')'),
-    "중국 PS/EPS/ABS 복합 가동률": df_sm_weekly_f_or.columns[2],
+    "중국 PS/EPS/ABS 복합 가동률": df_sm_weekly_f_or.columns[-1],
     "중국 PS/EPS/ABS 복합 마진": 0,
-    "중국 Phenol 가동률": df_bz_weekly_f_or.columns[2],
+    "중국 Phenol 가동률": df_bz_weekly_f_or.columns[-1],
     "중국 Phenol 마진": df_bz_daily[0].iloc[0, 0].split('(')[1].strip(')'),
-    "중국 Aniline 가동률": df_bz_weekly_f_or.columns[2],
+    "중국 Aniline 가동률": df_bz_weekly_f_or.columns[-1],
     "중국 Aniline 마진": df_bz_daily[0].iloc[0, 0].split('(')[1].strip(')'),
-    "중국 CPL 가동률": df_bz_weekly_f_or.columns[2],
+    "중국 CPL 가동률": df_bz_weekly_f_or.columns[-1],
     "중국 CPL 마진": df_bz_daily[0].iloc[0, 0].split('(')[1].strip(')'),
-    "중국 BZ 화동": df_bz_weekly_f_inv.columns[2],
-    "중국 SM 화동": df_sm_weekly_f_inv.columns[2]
+    "중국 BZ 화동": df_bz_weekly_f_inv.columns[-1],
+    "중국 SM 화동": df_sm_weekly_f_inv.columns[-1]
 }
 
 df_bz_result['Date'] = df_bz_result.index.map(data_map_bz_2)
