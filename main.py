@@ -266,9 +266,9 @@ else:
 # 10. 최종 결과 데이터프레임 매핑 (Value & Date)
 # =========================================================
 data_map_bz_1 = {
-    "Asia BZ": df_bz_weekly_f_or.iloc[1, 2],
-    "중국 BZ (Oil-based)": df_bz_weekly_f_or.iloc[0, 2],
-    "중국 BZ (Coal-based)": df_bz_weekly_f_or.iloc[2, 2],
+    "Asia BZ": df_bz_weekly_f_or.iloc[1, -1],
+    "중국 BZ (Oil-based)": df_bz_weekly_f_or.iloc[0, -1],
+    "중국 BZ (Coal-based)": df_bz_weekly_f_or.iloc[2, -1],
     "미국 Refinery": df_eia.iloc[-1,-1],
     "NEA BZ Extraction": df_icis.iloc[0,2],
     "NEA TDP": df_icis.iloc[2,2],
@@ -279,19 +279,19 @@ data_map_bz_1 = {
     "BZ US(M+2)-FOB KOR": 0,
     "BZ CFR CHN-ARA(M)": 0,
     "SM ARA(M+1)-Asia": 0,
-    "중국 D/S 복합 가동률": ((df_bz_weekly_f_or.iloc[3, 2]*0.38) + (df_bz_weekly_f_or.iloc[4, 2]*0.14) + (df_bz_weekly_f_or.iloc[6, 2] *0.24) + (df_bz_weekly_f_or.iloc[7, 2] *0.12))/0.88,
-    "중국 SM 가동률": df_bz_weekly_f_or.iloc[3, 2],
+    "중국 D/S 복합 가동률": ((df_bz_weekly_f_or.iloc[3, -1]*0.38) + (df_bz_weekly_f_or.iloc[4, -1]*0.14) + (df_bz_weekly_f_or.iloc[6, -1] *0.24) + (df_bz_weekly_f_or.iloc[7, -1] *0.12))/0.88,
+    "중국 SM 가동률": df_bz_weekly_f_or.iloc[3, -1],
     "중국 SM 마진": df_bz_daily_f.iloc[0, 3]/USDCNY,
-    "중국 PS/EPS/ABS 복합 가동률": ((df_sm_weekly_f_or.iloc[2, 2]*0.29) + (df_sm_weekly_f_or.iloc[3, 2]*0.21) + (df_sm_weekly_f_or.iloc[1, 2] *0.24))/0.74,
+    "중국 PS/EPS/ABS 복합 가동률": ((df_sm_weekly_f_or.iloc[2, -1]*0.29) + (df_sm_weekly_f_or.iloc[3, -1]*0.21) + (df_sm_weekly_f_or.iloc[1, -1] *0.24))/0.74,
     "중국 PS/EPS/ABS 복합 마진": 0,
-    "중국 Phenol 가동률": df_bz_weekly_f_or.iloc[4, 2],
+    "중국 Phenol 가동률": df_bz_weekly_f_or.iloc[4, -1],
     "중국 Phenol 마진": df_bz_daily_f.iloc[1, 3]/USDCNY,
-    "중국 Aniline 가동률": df_bz_weekly_f_or.iloc[7, 2],
+    "중국 Aniline 가동률": df_bz_weekly_f_or.iloc[7, -1],
     "중국 Aniline 마진": df_bz_daily_f.iloc[2, 3]/USDCNY,
-    "중국 CPL 가동률": df_bz_weekly_f_or.iloc[6, 2],
+    "중국 CPL 가동률": df_bz_weekly_f_or.iloc[6, -1],
     "중국 CPL 마진": df_bz_daily_f.iloc[3, 3]/USDCNY,
-    "중국 BZ 화동": df_bz_weekly_f_inv.iloc[0, 2],
-    "중국 SM 화동": df_sm_weekly_f_inv.iloc[0, 2]
+    "중국 BZ 화동": df_bz_weekly_f_inv.iloc[0, -1],
+    "중국 SM 화동": df_sm_weekly_f_inv.iloc[0, -1]
 }
 
 df_bz_result = pd.Series(data_map_bz_1).to_frame(name='Value')
