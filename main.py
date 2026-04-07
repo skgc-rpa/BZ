@@ -394,7 +394,7 @@ print("=== 메일 발송 준비 ===")
 sender_email = os.environ.get("GMAIL_USER")
 app_password = os.environ.get("GMAIL_APP_PASSWORD")
 
-to_emails = "carly1206@sk.com, rchangjo@sk.com"
+to_emails = "youngchoi@sk.com, carly1206@sk.com, rchangjo@sk.com"
 cc_emails = "michael.park@sk.com, jsoh@sk.com, hoseok@sk.com, hyo548@sk.com, cr7@sk.com, jp_lee@sk.com"
 # to_emails = "jp_lee@sk.com"
 # cc_emails = "jp_lee@sk.com"
