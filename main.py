@@ -216,10 +216,12 @@ dfs = [df_bz_daily_f, df_bz_weekly_f_or, df_bz_weekly_f_inv, df_sm_weekly_f_or, 
 # 교체
 for df in dfs:
     if df.shape[1] >= 2:
-        df.iloc[:, -1] = pd.to_numeric(
-            df.iloc[:, -1].astype(str).str.replace(',', '', regex=False),
+        last_vals = df.iloc[:, -1].to_numpy()
+        cleaned = pd.to_numeric(
+            pd.Series(last_vals).astype(str).str.replace(',', '', regex=False),
             errors='coerce'
-        )
+        ).to_numpy()
+        df.iloc[:, -1] = cleaned
 
 
 print("✅ CCFGroup 테이블 DataFrame 추출 및 전처리 완료")
