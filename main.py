@@ -186,7 +186,24 @@ df_bz_weekly_f_inv = df_bz_weekly_f.iloc[df_bz_weekly_f.iloc[:, 0].str.contains(
 df_sm_weekly_f = df_sm_weekly[2].iloc[1:df_sm_weekly[2].iloc[:, 0].str.contains('Import & export', na=False).idxmax(), :].T.drop_duplicates(keep='first').T.reset_index(drop=True).pipe(lambda d: d.rename(columns=d.iloc[0]).drop(d.index[0]).reset_index(drop=True))
 df_sm_weekly_f_or = df_sm_weekly_f.iloc[:df_sm_weekly_f.iloc[:, 0].str.contains('Styrene port inventory', na=False).idxmax()].reset_index(drop=True)
 df_sm_weekly_f_inv = df_sm_weekly_f.iloc[df_sm_weekly_f.iloc[:, 0].str.contains('Styrene port inventory', na=False).idxmax():df_sm_weekly_f.iloc[:, 0].str.contains('Cash flow', na=False).idxmax()].reset_index(drop=True).pipe(lambda d: d.rename(columns=d.iloc[0]).drop(d.index[0]).reset_index(drop=True))
-df_sm_weekly_f_cf = df_sm_weekly_f.iloc[df_sm_weekly_f.iloc[:, 0].str.contains('Cash flow', na=False).idxmax():].reset_index(drop=True).pipe(lambda d: d.rename(columns=d.iloc[1]).drop(d.index[:2]).reset_index(drop=True)).pipe(lambda d: d.rename(columns={d.columns[0]: 'Cash flow (yuan/mt)'}))
+
+# 응급처치로 수정
+# df_sm_weekly_f_cf = df_sm_weekly_f.iloc[df_sm_weekly_f.iloc[:, 0].str.contains('Cash flow', na=False).idxmax():].reset_index(drop=True).pipe(lambda d: d.rename(columns=d.iloc[1]).drop(d.index[:2]).reset_index(drop=True)).pipe(lambda d: d.rename(columns={d.columns[0]: 'Cash flow (yuan/mt)'}))
+
+cf_mask = df_sm_weekly_f.iloc[:, 0].astype(str).str.contains('Cash flow', na=False)
+if not cf_mask.any():
+    raise ValueError("'Cash flow' not found in df_sm_weekly_f")
+
+df_sm_weekly_f_cf = (
+    df_sm_weekly_f.iloc[cf_mask[cf_mask].index[0]:]
+    .reset_index(drop=True)
+)
+
+cf_cols = df_sm_weekly_f_cf.iloc[1].astype(str).tolist()
+df_sm_weekly_f_cf = df_sm_weekly_f_cf.drop(df_sm_weekly_f_cf.index[:2]).reset_index(drop=True)
+df_sm_weekly_f_cf.columns = cf_cols
+df_sm_weekly_f_cf = df_sm_weekly_f_cf.rename(columns={df_sm_weekly_f_cf.columns[0]: 'Cash flow (yuan/mt)'})
+# 여기까지
 
 dfs = [df_bz_daily_f, df_bz_weekly_f_or, df_bz_weekly_f_inv, df_sm_weekly_f_or, df_sm_weekly_f_inv, df_sm_weekly_f_cf]
 
