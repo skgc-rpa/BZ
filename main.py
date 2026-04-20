@@ -183,46 +183,60 @@ df_bz_daily_f = df_bz_daily[1].iloc[7:14,:].reset_index(drop=True).pipe(lambda d
 df_bz_weekly_f = df_bz_weekly[2].iloc[:13,:].T.drop_duplicates(keep='first').T.reset_index(drop=True).pipe(lambda d: d.rename(columns=d.iloc[0]).drop(d.index[0]).reset_index(drop=True))
 df_bz_weekly_f_or = df_bz_weekly_f.iloc[:df_bz_weekly_f.iloc[:, 0].str.contains('Inventory', na=False).idxmax()].reset_index(drop=True)
 df_bz_weekly_f_inv = df_bz_weekly_f.iloc[df_bz_weekly_f.iloc[:, 0].str.contains('Inventory', na=False).idxmax():].reset_index(drop=True).pipe(lambda d: d.rename(columns=d.iloc[0]).drop(d.index[0]).reset_index(drop=True))
-df_sm_weekly_f = df_sm_weekly[2].iloc[1:df_sm_weekly[2].iloc[:, 0].str.contains('Import & export', na=False).idxmax(), :].T.drop_duplicates(keep='first').T.reset_index(drop=True).pipe(lambda d: d.rename(columns=d.iloc[0]).drop(d.index[0]).reset_index(drop=True))
-df_sm_weekly_f_or = df_sm_weekly_f.iloc[:df_sm_weekly_f.iloc[:, 0].str.contains('Styrene port inventory', na=False).idxmax()].reset_index(drop=True)
-df_sm_weekly_f_inv = df_sm_weekly_f.iloc[df_sm_weekly_f.iloc[:, 0].str.contains('Styrene port inventory', na=False).idxmax():df_sm_weekly_f.iloc[:, 0].str.contains('Cash flow', na=False).idxmax()].reset_index(drop=True).pipe(lambda d: d.rename(columns=d.iloc[0]).drop(d.index[0]).reset_index(drop=True))
 
-# 응급처치로 수정
-# df_sm_weekly_f_cf = df_sm_weekly_f.iloc[df_sm_weekly_f.iloc[:, 0].str.contains('Cash flow', na=False).idxmax():].reset_index(drop=True).pipe(lambda d: d.rename(columns=d.iloc[1]).drop(d.index[:2]).reset_index(drop=True)).pipe(lambda d: d.rename(columns={d.columns[0]: 'Cash flow (yuan/mt)'}))
-
-cf_mask = df_sm_weekly_f.iloc[:, 0].astype(str).str.contains('Cash flow', na=False)
-if not cf_mask.any():
-    raise ValueError("'Cash flow' not found in df_sm_weekly_f")
-
-df_sm_weekly_f_cf = (
-    df_sm_weekly_f.iloc[cf_mask[cf_mask].index[0]:]
+# ===== 수정 시작: sm_weekly는 처음부터 마지막 열만 유지 =====
+df_sm_weekly_f = (
+    df_sm_weekly[2]
+    .iloc[
+        1:df_sm_weekly[2].iloc[:, 0].astype(str).str.contains('Import & export', na=False).idxmax(),
+        :
+    ]
+    .T.drop_duplicates(keep='first').T
     .reset_index(drop=True)
+    .pipe(lambda d: d.rename(columns=d.iloc[0]).drop(d.index[0]).reset_index(drop=True))
 )
 
-cf_cols = df_sm_weekly_f_cf.iloc[1].astype(str).tolist()
-df_sm_weekly_f_cf = df_sm_weekly_f_cf.drop(df_sm_weekly_f_cf.index[:2]).reset_index(drop=True)
-df_sm_weekly_f_cf.columns = cf_cols
-df_sm_weekly_f_cf = df_sm_weekly_f_cf.rename(columns={df_sm_weekly_f_cf.columns[0]: 'Cash flow (yuan/mt)'})
-# 추가
-df_sm_weekly_f_cf = df_sm_weekly_f_cf.iloc[:, [0, -1]]
-df_sm_weekly_f_cf.columns = ['Cash flow (yuan/mt)', 'Latest']
+sm_item_col = str(df_sm_weekly_f.columns[0])
+sm_latest_col = str(df_sm_weekly_f.columns[-1])
+
+df_sm_weekly_f = df_sm_weekly_f.iloc[:, [0, -1]].copy()
+df_sm_weekly_f.columns = [sm_item_col, sm_latest_col]
+
+df_sm_weekly_f[sm_latest_col] = pd.to_numeric(
+    df_sm_weekly_f[sm_latest_col].astype(str).str.replace(',', '', regex=False),
+    errors='coerce'
+)
+
+mask_inv = df_sm_weekly_f.iloc[:, 0].astype(str).str.contains('Styrene port inventory', na=False)
+mask_cf = df_sm_weekly_f.iloc[:, 0].astype(str).str.contains('Cash flow', na=False)
+
+if not mask_inv.any():
+    raise ValueError("'Styrene port inventory' not found in df_sm_weekly_f")
+if not mask_cf.any():
+    raise ValueError("'Cash flow' not found in df_sm_weekly_f")
+
+inv_idx = mask_inv.idxmax()
+cf_idx = mask_cf.idxmax()
+
+df_sm_weekly_f_or = df_sm_weekly_f.iloc[:inv_idx].reset_index(drop=True).copy()
+
+df_sm_weekly_f_inv = df_sm_weekly_f.iloc[inv_idx + 1:cf_idx].reset_index(drop=True).copy()
+df_sm_weekly_f_inv.columns = ['Styrene port inventory (kt)', sm_latest_col]
+
+df_sm_weekly_f_cf = df_sm_weekly_f.iloc[cf_idx + 2:].reset_index(drop=True).copy()
+df_sm_weekly_f_cf.columns = ['Cash flow (yuan/mt)', sm_latest_col]
+# ===== 수정 끝 =====
 
 dfs = [df_bz_daily_f, df_bz_weekly_f_or, df_bz_weekly_f_inv, df_sm_weekly_f_or, df_sm_weekly_f_inv, df_sm_weekly_f_cf]
 
-# for df in dfs:
-#     cols = df.columns[1:]
-#     df[cols] = df[cols].replace(',', '', regex=True)
-#     df[cols] = df[cols].apply(pd.to_numeric, errors='coerce')
-# 교체
-for df in dfs:
-    if df.shape[1] >= 2:
-        last_vals = df.iloc[:, -1].to_numpy()
-        cleaned = pd.to_numeric(
-            pd.Series(last_vals).astype(str).str.replace(',', '', regex=False),
-            errors='coerce'
-        ).to_numpy()
-        df.iloc[:, -1] = cleaned
-
+# ===== 수정 시작: BZ 쪽만 마지막 열 숫자 변환 =====
+for df in [df_bz_daily_f, df_bz_weekly_f_or, df_bz_weekly_f_inv]:
+    last_col = df.columns[-1]
+    df[last_col] = pd.to_numeric(
+        df[last_col].astype(str).str.replace(',', '', regex=False),
+        errors='coerce'
+    )
+# ===== 수정 끝 =====
 
 print("✅ CCFGroup 테이블 DataFrame 추출 및 전처리 완료")
 
