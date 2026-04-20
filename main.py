@@ -203,14 +203,24 @@ cf_cols = df_sm_weekly_f_cf.iloc[1].astype(str).tolist()
 df_sm_weekly_f_cf = df_sm_weekly_f_cf.drop(df_sm_weekly_f_cf.index[:2]).reset_index(drop=True)
 df_sm_weekly_f_cf.columns = cf_cols
 df_sm_weekly_f_cf = df_sm_weekly_f_cf.rename(columns={df_sm_weekly_f_cf.columns[0]: 'Cash flow (yuan/mt)'})
-# 여기까지
+# 추가
+df_sm_weekly_f_cf = df_sm_weekly_f_cf.iloc[:, [0, -1]]
+df_sm_weekly_f_cf.columns = ['Cash flow (yuan/mt)', 'Latest']
 
 dfs = [df_bz_daily_f, df_bz_weekly_f_or, df_bz_weekly_f_inv, df_sm_weekly_f_or, df_sm_weekly_f_inv, df_sm_weekly_f_cf]
 
+# for df in dfs:
+#     cols = df.columns[1:]
+#     df[cols] = df[cols].replace(',', '', regex=True)
+#     df[cols] = df[cols].apply(pd.to_numeric, errors='coerce')
+# 교체
 for df in dfs:
-    cols = df.columns[1:]
-    df[cols] = df[cols].replace(',', '', regex=True)
-    df[cols] = df[cols].apply(pd.to_numeric, errors='coerce')
+    if df.shape[1] >= 2:
+        df.iloc[:, -1] = pd.to_numeric(
+            df.iloc[:, -1].astype(str).str.replace(',', '', regex=False),
+            errors='coerce'
+        )
+
 
 print("✅ CCFGroup 테이블 DataFrame 추출 및 전처리 완료")
 
