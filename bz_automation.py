@@ -21,7 +21,7 @@ APP_PASSWORD = os.environ.get("GMAIL_APP_PASSWORD", "")
 SEARCH_KEYWORD = "BZ"
 
 RECIPIENT_EMAILS = os.environ.get("RECIPIENT_EMAILS", "carly1206@sk.com")
-CC_EMAILS = os.environ.get("CC_EMAILS", "jp_lee@sk.com")
+CC_EMAILS = os.environ.get("CC_EMAILS", "youngchoi@sk.com, rchangjo@sk.com, jp_lee@sk.com")
 
 TEMP_DIR = "./original_bz_files"      
 CUMULATIVE_PATH = "./bz_cumulative_result.xlsx" 
