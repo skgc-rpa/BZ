@@ -1,0 +1,35 @@
+name: BZ RPA Email Automation
+
+on:
+  # 외부 API 호출(Webhook)이나 다른 파이프라인에서 트리거할 수 있도록 schedule은 주석 처리합니다.
+  # schedule:
+  #   # KST 오전 9시 = UTC 0시 / 매일 실행 
+  #   - cron: '0 0 * * *'
+  workflow_dispatch: # 버튼 클릭으로 수동 실행이 가능하도록 유지
+
+jobs:
+  run-bz-automation:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          # 기존에 구성된 requirements.txt를 사용하여 안정적으로 라이브러리 설치
+          pip install -r requirements.txt
+
+      - name: Run BZ Automation Script
+        # 새로 작성한 BZ 취합 파이썬 파일 실행
+        run: python bz_automation.py
+        env:
+          # GitHub Secrets에 등록된 메일 계정 정보를 환경 변수로 전달
+          GMAIL_USER: ${{ secrets.GMAIL_USER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
