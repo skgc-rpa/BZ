@@ -36,9 +36,9 @@ def send_result_email(sender, app_pwd, recipients_str, cc_str, attachments):
     msg['To'] = recipients_str       
     if cc_str:
         msg['Cc'] = cc_str           
-    msg['Subject'] = "[RPA] BZ 데이터 누적 취합 결과 및 원본 파일 안내"
+    msg['Subject'] = "[RPA] BZ 데이터 누적 취합 결과"
     
-    body = "BZ 데이터 누적 취합 엑셀 파일과 원본 엑셀 파일들의 압축본 송부 드립니다.\n\n업무에 참고하시기 바랍니다."
+    body = "BZ 데이터 누적 취합 엑셀 파일 송부 드립니다.\n\n업무에 참고하시기 바랍니다."
     msg.attach(MIMEText(body, 'plain'))
     
     for file_path in attachments:
@@ -178,7 +178,8 @@ def aggregate_zip_and_send_bz_data():
         final_zip_path = f"{ZIP_OUTPUT_PATH}.zip"
         print(f"[성공] 2. 원본 파일 압축 완료: {final_zip_path}")
         
-        attachments_to_send = [CUMULATIVE_PATH, final_zip_path]
+        attachments_to_send = [CUMULATIVE_PATH]
+        # attachments_to_send = [CUMULATIVE_PATH, final_zip_path]
         send_result_email(EMAIL, APP_PASSWORD, RECIPIENT_EMAILS, CC_EMAILS, attachments_to_send)
         
         print("\n[완료] 모든 작업이 성공적으로 끝났습니다. GitHub Actions 세션이 종료되면 임시 파일은 자동 삭제됩니다.")
